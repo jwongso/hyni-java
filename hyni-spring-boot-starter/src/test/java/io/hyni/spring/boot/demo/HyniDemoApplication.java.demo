@@ -1,0 +1,179 @@
+package io.hyni.spring.boot.demo;
+
+import io.hyni.spring.boot.HyniTemplate;
+import io.hyni.spring.boot.model.ChatRequest;
+import io.hyni.spring.boot.model.ChatResponse;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.Bean;
+
+import java.util.Scanner;
+
+@SpringBootApplication
+public class HyniDemoApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(HyniDemoApplication.class, args);
+    }
+
+    @Bean
+    CommandLineRunner demo(HyniTemplate hyniTemplate) {
+        return args -> {
+            System.out.println("\n" + "=".repeat(50));
+            System.out.println("🚀 HYNI SPRING BOOT DEMO");
+            System.out.println("=".repeat(50));
+
+            // Configure all providers
+            configureProviders(hyniTemplate);
+
+            System.out.println("\nAvailable providers: " + hyniTemplate.getAvailableProviders());
+
+            // Check which providers are configured
+            String[] providers = {"openai", "claude", "deepseek", "mistral"};
+            System.out.println("\nConfigured providers:");
+            for (String provider : providers) {
+                boolean available = hyniTemplate.isProviderAvailable(provider);
+                System.out.println("  " + provider + ": " + (available ? "✅" : "❌"));
+            }
+
+            // Interactive chat
+            interactiveChat(hyniTemplate);
+        };
+    }
+
+    private void configureProviders(HyniTemplate hyniTemplate) {
+        configureFromEnv(hyniTemplate, "openai", "OA_API_KEY");
+        configureFromEnv(hyniTemplate, "claude", "CL_API_KEY");
+        configureFromEnv(hyniTemplate, "deepseek", "DS_API_KEY");
+        configureFromEnv(hyniTemplate, "mistral", "MS_API_KEY");
+    }
+
+    private void configureFromEnv(HyniTemplate hyniTemplate, String provider, String envVar) {
+        String apiKey = System.getenv(envVar);
+        if (apiKey != null && !apiKey.isEmpty()) {
+            hyniTemplate.configureProvider(provider, apiKey);
+            System.out.println("✅ Configured " + provider + " from " + envVar);
+        } else {
+            System.out.println("⚠️  No API key found for " + provider + " (" + envVar + ")");
+        }
+    }
+
+    private void interactiveChat(HyniTemplate hyniTemplate) {
+        Scanner scanner = new Scanner(System.in);
+
+        System.out.println("\n" + "=".repeat(50));
+        System.out.println("💬 INTERACTIVE CHAT");
+        System.out.println("=".repeat(50));
+        System.out.println("Commands:");
+        System.out.println("  /provider <name> - Switch provider");
+        System.out.println("  /compare <message> - Compare all providers");
+        System.out.println("  /system <message> - Set system message");
+        System.out.println("  /exit - Quit");
+        System.out.println();
+
+        String currentProvider = "openai";
+        String systemMessage = null;
+
+        while (true) {
+            System.out.print("(" + currentProvider + ") You: ");
+            String input = scanner.nextLine().trim();
+
+            if (input.startsWith("/")) {
+                String[] parts = input.split(" ", 2);
+                String command = parts[0];
+                String arg = parts.length > 1 ? parts[1] : "";
+
+                switch (command) {
+                    case "/exit":
+                        System.out.println("👋 Goodbye!");
+                        return;
+
+                    case "/provider":
+                        if (!arg.isEmpty()) {
+                            currentProvider = arg;
+                            System.out.println("Switched to: " + currentProvider);
+                        } else {
+                            System.out.println("Usage: /provider <name>");
+                        }
+                        break;
+
+                    case "/compare":
+                        if (!arg.isEmpty()) {
+                            compareProviders(hyniTemplate, arg);
+                        } else {
+                            System.out.println("Usage: /compare <message>");
+                        }
+                        break;
+
+                    case "/system":
+                        systemMessage = arg.isEmpty() ? null : arg;
+                        System.out.println("System message: " + (systemMessage != null ? systemMessage : "cleared"));
+                        break;
+
+                    default:
+                        System.out.println("Unknown command: " + command);
+                }
+                continue;
+            }
+
+            if (input.isEmpty()) continue;
+
+            try {
+                ChatRequest.Builder requestBuilder = ChatRequest.builder()
+                    .addUserMessage(input)
+                    .temperature(0.7)
+                    .maxTokens(200);
+
+                if (systemMessage != null) {
+                    requestBuilder.systemMessage(systemMessage);
+                }
+
+                ChatRequest request = requestBuilder.build();
+
+                long startTime = System.currentTimeMillis();
+                ChatResponse response = hyniTemplate.chat(currentProvider, request);
+                long totalTime = System.currentTimeMillis() - startTime;
+
+                System.out.println("🤖 Assistant: " + response.getText());
+                System.out.println("   📊 " + response.getModel() + " | " +
+                                 response.getDuration() + "ms API | " +
+                                 totalTime + "ms total");
+                System.out.println();
+
+            } catch (Exception e) {
+                System.err.println("❌ Error: " + e.getMessage());
+                System.out.println();
+            }
+        }
+    }
+
+    private void compareProviders(HyniTemplate hyniTemplate, String message) {
+        System.out.println("\n🔄 Comparing providers for: \"" + message + "\"");
+        System.out.println("-".repeat(60));
+
+        String[] providers = {"openai", "claude", "deepseek", "mistral"};
+
+        for (String provider : providers) {
+            if (!hyniTemplate.isProviderAvailable(provider)) {
+                System.out.println(provider.toUpperCase() + ": Not configured");
+                continue;
+            }
+
+            try {
+                long startTime = System.currentTimeMillis();
+                ChatResponse response = hyniTemplate.chat(provider, message);
+                long totalTime = System.currentTimeMillis() - startTime;
+
+                System.out.println("\n" + provider.toUpperCase() + ":");
+                System.out.println("Response: " + response.getText());
+                System.out.println("Model: " + response.getModel());
+                System.out.println("Time: " + response.getDuration() + "ms API / " + totalTime + "ms total");
+
+            } catch (Exception e) {
+                System.out.println("\n" + provider.toUpperCase() + ": Error - " + e.getMessage());
+            }
+        }
+        System.out.println("-".repeat(60));
+    }
+}

@@ -1,0 +1,32 @@
+hyni:
+  enabled: true
+  default-provider: openai
+  schema-directory: schemas
+  logging-enabled: true
+  metrics-enabled: true
+  validation-enabled: true
+
+  defaults:
+    max-tokens: 1000
+    temperature: 0.7
+    timeout: 30000
+
+  providers:
+    openai:
+      api-key-env-var: OA_API_KEY
+      model: gpt-4
+      parameters:
+        temperature: 0.7
+
+    claude:
+      api-key-env-var: CL_API_KEY
+      model: claude-3-opus-20240229
+
+    mistral:
+      api-key-env-var: MS_API_KEY
+      model: mistral-large-latest
+
+  cache:
+    enabled: true
+    max-size: 1000
+    ttl-minutes: 60
